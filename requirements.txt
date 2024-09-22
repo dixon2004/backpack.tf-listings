@@ -1,0 +1,7 @@
+python-dotenv
+tf2-utilities
+websockets
+uvicorn
+aiohttp
+fastapi
+motor
