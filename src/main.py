@@ -5,10 +5,10 @@ from contextlib import asynccontextmanager
 from utils.token import AuthorizationToken
 from api.backpack_tf import BackpackTFAPI
 from utils.port import PortConfiguration
-from utils.config import save_user_data
 from utils.tasks import BackgroundTasks
 from utils.utils import check_sku
 from utils.log import write_log
+from utils.config import *
 import uvicorn
 import asyncio
 import json
@@ -171,6 +171,18 @@ async def websocket_endpoint(websocket: WebSocket):
     
 
 if __name__ == "__main__":
+    if not DATABASE_URL:
+        write_log("error", "Database URL is not set.")
+        exit(1)
+
+    if not BPTF_TOKEN:
+        write_log("error", "Backpack.TF token is not set.")
+        exit(1)
+
+    if not STEAM_API_KEY:
+        write_log("error", "Steam API key is not set.")
+        exit(1)
+
     port = port_config.get_port()
     if not port:
         write_log("error", "No available port found.")
