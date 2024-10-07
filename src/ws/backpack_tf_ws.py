@@ -131,7 +131,9 @@ class BackpackTFWebSocket:
                                 data["sheen"] = {"id": item["sheen"]["id"], "name": item["sheen"]["name"]}
 
                             await self.listings_db.update(item_sku, data)
-                            self.updated_listings.append({"sku": item_sku, "name": item_name})
+                            
+                            if item_sku not in [listing["sku"] for listing in self.updated_listings]:
+                                self.updated_listings.append({"sku": item_sku, "name": item_name})
 
                             if save_user_data and payload.get("user"):
                                 payload["user"]["_id"] = payload["user"]["id"]
