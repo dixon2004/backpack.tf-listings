@@ -207,10 +207,12 @@ The **Backpack.tf Listings** application supports a websocket connection that al
 When updates are received via the websocket, the data is structured as follows:
 
 ```json
-{
-    "sku": "item_sku",
-    "name": "item_name"
-}
+[
+   {
+       "sku": "item_sku",
+       "name": "item_name"
+   }
+]
 ```
 
 This format provides the SKU and name of the item that has been updated, enabling clients to react to market changes in real time.
