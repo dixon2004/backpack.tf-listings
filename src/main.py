@@ -148,6 +148,7 @@ class ConnectionManager:
                     await connection.send_text(json.dumps(message))
                 except Exception as e:
                     write_log("error", f"[ConnectionManager] Failed to broadcast message: {e}")
+                    self.disconnect(connection)
         except Exception as e:
             write_log("error", f"[ConnectionManager] Failed to broadcast: {e}")
 
