@@ -19,7 +19,6 @@
    - [Set Up a Virtual Environment](#set-up-a-virtual-environment)
    - [Install Dependencies](#install-dependencies)
    - [Environment Variables](#environment-variables)
-   - [Configuration](#configuration)
    - [Run the Application](#run-the-application)
    - [Optional: PM2 Setup for Linux Users](#optional-pm2-setup-for-linux-users)
 2. [API Usage](#api-usage)
@@ -81,22 +80,9 @@ Set the following environment variables before running the application:
 - `DATABASE_URL`: MongoDB connection string (e.g., `mongodb://localhost:27017`).
 - `BPTF_TOKEN`: Your Backpack.tf API token, obtainable from [here](https://backpack.tf/connections).
 - `STEAM_API_KEY`: Your Steam API key, obtainable from [here](https://steamcommunity.com/dev/apikey).
-
-### Configuration
-
-Customize the application settings via the `options.json` file located in the project directory. Here is the default configuration:
-
-```json
-{
-    "save_user_data": false,
-    "auth_token": "",  // Optionally provide an Auth Token. If left empty, no token is required for API access.
-    "port": 8000
-}
-```
-
-- `save_user_data`: Set to `true` to enable saving user data in the database.
-- `auth_token`: Optionally specify an authorization token for API access. If left empty, no token will be required.
-- `port`: Define the port number for the API (default is 8000).
+- `AUTH_TOKEN`: Optionally specify an authorization token for API access. If left empty, no token will be required.
+- `SAVE_USER_DATA`: Set to `true` to enable saving user data in the database (default is false). 
+- `SERVER_PORT`: Define the port number for the API (default is 8000).
 
 ### Run the Application
 
