@@ -66,7 +66,8 @@ paints_attributes = {
     15185211: "Australium Gold",
     15308410: "Dark Salmon Injustice",
     15787660: "The Color of a Gentlemann's Business Pants",
-    16738740: "Pink as Hell"
+    16738740: "Pink as Hell",
+    1: "#B8383B"
 }
 
 strange_parts_attributes = {
