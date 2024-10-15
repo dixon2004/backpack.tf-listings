@@ -1,5 +1,5 @@
 from data.database import ListingsDatabase, UsersDatabase
-from utils.config import save_user_data
+from utils.config import SAVE_USER_DATA
 from utils.log import write_log
 from collections import deque
 from utils.utils import *
@@ -12,6 +12,9 @@ import time
 class BackpackTFWebSocket:
 
     def __init__(self) -> None:
+        """
+        Initialize the BackpackTFWebSocket class.
+        """
         self.ws_url = 'wss://ws.backpack.tf/events'
         self.headers = {'appid': 440, 'batch-test': True}
         self.queue = deque()
@@ -135,7 +138,7 @@ class BackpackTFWebSocket:
                             if item_sku not in [listing["sku"] for listing in self.updated_listings]:
                                 self.updated_listings.append({"sku": item_sku, "name": item_name})
 
-                            if save_user_data and payload.get("user"):
+                            if SAVE_USER_DATA and payload.get("user"):
                                 payload["user"]["_id"] = payload["user"]["id"]
                                 await self.users_db.insert(payload["user"])
                         except Exception as e:

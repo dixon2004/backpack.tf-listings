@@ -26,7 +26,7 @@ background_tasks = BackgroundTasks()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     write_log("info", "Starting API server lifespan")
-    if not save_user_data:
+    if not SAVE_USER_DATA:
         await users_db.drop_database()
 
     asyncio.gather(
@@ -89,7 +89,7 @@ async def get_user(request: Request, steamid: str):
         if not auth_token.token_valid(token):
             raise HTTPException(status_code=401, detail="Unauthorized.")
         
-        if not save_user_data:
+        if not SAVE_USER_DATA:
             return {"success": False, "message": "User data saving is disabled."}
 
         user = await users_db.get(steamid)

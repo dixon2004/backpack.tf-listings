@@ -8,6 +8,9 @@ import random
 class BackgroundTasks:
 
     def __init__(self) -> None:
+        """
+        Initialize the BackgroundTasks class.
+        """
         self.bptf = BackpackTFAPI()
         self.listings_db = ListingsDatabase()
 

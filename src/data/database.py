@@ -12,8 +12,7 @@ class ListingsDatabase:
         """
         Initialize the Backpack.tf listings database.
         """
-        self.client = client
-        self.db = self.client["backpacktf_listings"]
+        self.db = client["backpacktf_listings"]
 
 
     async def get_collections(self) -> list:
@@ -123,8 +122,7 @@ class UsersDatabase:
         """
         Initialize the users database.
         """
-        self.client = client
-        self.db = self.client["backpacktf_users"]
+        self.db = client["backpacktf_users"]
         self.collection = self.db["users"]
 
 
