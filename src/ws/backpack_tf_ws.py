@@ -7,6 +7,7 @@ import websockets
 import asyncio
 import json
 import time
+import math
 
 
 class BackpackTFWebSocket:
@@ -42,7 +43,10 @@ class BackpackTFWebSocket:
                         if isinstance(messages, list):
                             self.queue.extend(messages)
                             write_log("info", f"[BackpackTFWebSocket] Received {len(messages)} messages")
-                        await asyncio.sleep(1)
+                            
+                        sleep_time = math.ceil(len(self.queue) / 2000)
+                        if sleep_time > 0:
+                            await asyncio.sleep(sleep_time)
             except websockets.exceptions.ConnectionClosedError:
                 write_log("error", "[BackpackTFWebSocket] Connection closed")
                 await asyncio.sleep(1)
@@ -61,8 +65,7 @@ class BackpackTFWebSocket:
             try:
                 await asyncio.sleep(1)
                 if self.queue:
-                    batch_size = int(len(self.queue) / 100) * 100
-                    batch = [self.queue.popleft() for _ in range(min(batch_size, len(self.queue)))]
+                    batch = [self.queue.popleft() for _ in range(min(len(self.queue), 2000))]
                     if not batch:
                         continue
 
