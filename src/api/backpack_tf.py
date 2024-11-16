@@ -1,6 +1,6 @@
 from data.database import ListingsDatabase
+from utils.logger import AsyncLogger
 from utils.config import BPTF_TOKEN
-from utils.log import write_log
 from utils.utils import *
 import aiohttp
 import asyncio
@@ -11,11 +11,11 @@ class BackpackTFAPI:
 
     def __init__(self) -> None:
         """
-        Initialize the Backpack.tf API.
+        Initialize the BackpackTFAPI class.
         """
         self.url = "https://backpack.tf/api"
-        self.timeout = 10
 
+        self.logger = AsyncLogger("BackpackTFAPI")
         self.listings_db = ListingsDatabase()
 
 
@@ -32,11 +32,11 @@ class BackpackTFAPI:
         """
         try:
             async with aiohttp.ClientSession(raise_for_status=True) as session:
-                async with session.get(url, params=params, timeout=self.timeout) as response:
+                async with session.get(url, params=params, timeout=10) as response:
                     await asyncio.sleep(1)
                     return await response.json()
         except Exception as e:
-            write_log("error", f"[BackpackTFAPI] Failed to call API: {e}")
+            await self.logger.write_log("error", f"Failed to call API: {e}")
 
 
     async def fetch_snapshots(self, name: str) -> list:
@@ -58,10 +58,10 @@ class BackpackTFAPI:
             response = await self.call(f"{self.url}/classifieds/listings/snapshot", params)
             return response
         except Exception as e:
-            write_log("error", f"[BackpackTFAPI] Failed to fetch snapshots: {e}")
+            await self.logger.write_log("error", f"Failed to fetch snapshots: {e}")
 
 
-    def format_listing(self, listing: dict) -> dict:
+    async def format_listing(self, listing: dict) -> dict:
         """
         Format the listing.
         
@@ -73,6 +73,7 @@ class BackpackTFAPI:
         """
         try:
             currencies = listing["currencies"]
+
             # Skip Marketplace.tf listings
             if "usd" in currencies:
                 return
@@ -131,7 +132,7 @@ class BackpackTFAPI:
 
             return data
         except Exception as e:
-            write_log("error", f"[BackpackTFAPI] Failed to format listing: {e}")
+            await self.logger.write_log("error", f"Failed to format listing ({listing}): {e}")
 
 
     async def get_listings(self, sku: str) -> list:
@@ -161,7 +162,7 @@ class BackpackTFAPI:
             
             formatted_listings = []
             for listing in listings:
-                formatted_listing = self.format_listing(listing)
+                formatted_listing = await self.format_listing(listing)
                 if formatted_listing:
                     formatted_listing["sku"] = sku
                     formatted_listing["name"] = item_name
@@ -172,4 +173,4 @@ class BackpackTFAPI:
 
             return formatted_listings
         except Exception as e:
-            write_log("error", f"[BackpackTFAPI] Failed to get listings: {e}")
+            await self.logger.write_log("error", f"Failed to get listings: {e}")

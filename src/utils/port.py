@@ -1,5 +1,5 @@
 from utils.config import SERVER_PORT
-from utils.log import write_log
+from utils.logger import SyncLogger
 import socket
 
 
@@ -9,6 +9,7 @@ class PortConfiguration:
         """
         Initialize the PortConfiguration class.
         """
+        self.logger = SyncLogger("PortConfiguration")
         self.reserved_ports = {5000, 7000}
 
 
@@ -34,7 +35,7 @@ class PortConfiguration:
                 except (socket.timeout, ConnectionRefusedError):
                     return False
         except Exception as e:
-            write_log("error", f"[PortConfiguration] Failed to check port: {e}")
+            self.logger.write_log("error", f"Failed to check port: {e}")
 
 
     def get_available_port(self) -> int:
@@ -50,7 +51,7 @@ class PortConfiguration:
                     return port
             return None
         except Exception as e:
-            write_log("error", f"[PortConfiguration] Failed to get available port: {e}")
+            self.logger.write_log("error", f"Failed to get available port: {e}")
 
 
     def get_port(self) -> int:
@@ -64,8 +65,8 @@ class PortConfiguration:
             if not self.check_port(SERVER_PORT):
                 return SERVER_PORT
             else:
-                write_log("info", f"[PortConfiguration] Port {SERVER_PORT} is in use.")
+                self.logger.write_log("info", f"Port {SERVER_PORT} is in use, finding an available port")
                 available_port = self.get_available_port()
                 return available_port
         except Exception as e:
-            write_log("error", f"[PortConfiguration] Failed to get port: {e}")
+            self.logger.write_log("error", f"Failed to get port: {e}")

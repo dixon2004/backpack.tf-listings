@@ -1,6 +1,6 @@
 from data.database import ListingsDatabase
 from api.backpack_tf import BackpackTFAPI
-from utils.log import write_log
+from utils.logger import AsyncLogger
 import asyncio
 import random
 
@@ -11,6 +11,7 @@ class BackgroundTasks:
         """
         Initialize the BackgroundTasks class.
         """
+        self.logger = AsyncLogger("BackgroundTasks")
         self.bptf = BackpackTFAPI()
         self.listings_db = ListingsDatabase()
 
@@ -30,10 +31,10 @@ class BackgroundTasks:
                             raise Exception("Listings not found.")
                         
                         item_name = listings[0]["name"]
-                        write_log("info", f"[BackgroundTasks] Refreshed listings: {item_name}")
+                        await self.logger.write_log("info", f"Refreshing listings: {item_name}")
                     except Exception as e:
-                        write_log("error", f"[BackgroundTasks] Failed to refresh listings ({sku}): {e}")
+                        await self.logger.write_log("error", f"Failed to refresh listings ({sku}): {e}")
                     await asyncio.sleep(1)
             except Exception as e:
-                write_log("error", f"[BackgroundTasks] Failed to refresh listings in background: {e}")
+                await self.logger.write_log("error", f"Failed to refresh listings in background: {e}")
             await asyncio.sleep(60)

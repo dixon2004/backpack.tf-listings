@@ -1,6 +1,6 @@
 from data.database import ListingsDatabase, UsersDatabase
 from utils.config import SAVE_USER_DATA
-from utils.log import write_log
+from utils.logger import AsyncLogger
 from collections import deque
 from utils.utils import *
 import websockets
@@ -18,9 +18,11 @@ class BackpackTFWebSocket:
         """
         self.ws_url = 'wss://ws.backpack.tf/events'
         self.headers = {'appid': 440, 'batch-test': True}
+        
         self.queue = deque()
         self.updated_listings = []
 
+        self.logger = AsyncLogger("BackpackTFWebSocket")
         self.listings_db = ListingsDatabase()
         self.users_db = UsersDatabase()
 
@@ -42,17 +44,17 @@ class BackpackTFWebSocket:
                         messages = json.loads(messages)
                         if isinstance(messages, list):
                             self.queue.extend(messages)
-                            write_log("info", f"[BackpackTFWebSocket] Received {len(messages)} messages")
+                            await self.logger.write_log("info", f"Received {len(messages)} messages")
                             
                         sleep_time = math.ceil(len(self.queue) / 2000)
                         if sleep_time > 0:
                             await asyncio.sleep(sleep_time)
             except websockets.exceptions.ConnectionClosedError:
-                write_log("error", "[BackpackTFWebSocket] Connection closed")
+                await self.logger.write_log("error", "Connection closed")
                 await asyncio.sleep(1)
                 continue
             except Exception as e:
-                write_log("error", f"[BackpackTFWebSocket] Failed to connect: {e}")
+                await self.logger.write_log("error", f"Failed to connect: {e}")
                 await asyncio.sleep(60)
                 continue
 
@@ -69,7 +71,7 @@ class BackpackTFWebSocket:
                     if not batch:
                         continue
 
-                    write_log("info", f"[BackpackTFWebSocket] Processing {len(batch)} messages, left {len(self.queue)} messages")
+                    await self.logger.write_log("info", f"Processing {len(batch)} messages, left {len(self.queue)} messages")
                     start_time = time.time()
                     for message in batch:
                         try:
@@ -93,7 +95,7 @@ class BackpackTFWebSocket:
                             event = message['event']
                             if event == "delete":
                                 await self.listings_db.delete(item_sku, listing_id)
-                                write_log("info", f"[BackpackTFWebSocket] Deleted listing: {item_name}")
+                                await self.logger.write_log("info", f"Deleted listing ({listing_id}) for {item_name}")
                                 continue
 
                             data = {
@@ -145,10 +147,10 @@ class BackpackTFWebSocket:
                                 payload["user"]["_id"] = payload["user"]["id"]
                                 await self.users_db.insert(payload["user"])
                         except Exception as e:
-                            write_log("error", f"[BackpackTFWebSocket] Failed to process message: {e}")
+                            await self.logger.write_log("error", f"Failed to process message: {e}")
 
                     time_taken = time.time() - start_time
-                    write_log("info", f"[BackpackTFWebSocket] Processed {len(batch)} messages in {time_taken:.2f}s (avg: {time_taken / len(batch):.4f}s/message)")
+                    await self.logger.write_log("info", f"Processed {len(batch)} messages in {time_taken:.2f}s (avg: {time_taken / len(batch):.4f}s/message)")
             except Exception as e:
-                write_log("error", f"[BackpackTFWebSocket] Failed to handle message: {e}")
+                await self.logger.write_log("error", f"Failed to handle messages: {e}")
                 continue

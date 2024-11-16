@@ -1,5 +1,5 @@
 from utils.config import DATABASE_URL
-from utils.log import write_log
+from utils.logger import AsyncLogger
 import motor.motor_asyncio
 
 
@@ -12,6 +12,7 @@ class ListingsDatabase:
         """
         Initialize the Backpack.tf listings database.
         """
+        self.logger = AsyncLogger("ListingsDatabase")
         self.db = client["backpacktf_listings"]
 
 
@@ -25,7 +26,7 @@ class ListingsDatabase:
         try:
             return await self.db.list_collection_names()
         except Exception as e:
-            write_log("error", f"[ListingsDatabase] Failed to get collections: {e}")
+            await self.logger.write_log("error", f"Failed to get collections: {e}")
 
 
     async def check_collection(self, sku: str) -> bool:
@@ -41,7 +42,7 @@ class ListingsDatabase:
         try:
             return sku in await self.get_collections()
         except Exception as e:
-            write_log("error", f"[ListingsDatabase] Failed to check collection: {e}")
+            await self.logger.write_log("error", f"Failed to check collection: {e}")
 
 
     async def get(self, sku: str) -> list:
@@ -58,7 +59,7 @@ class ListingsDatabase:
             cursor = self.db[sku].find({}, {"_id": False})
             return [listing async for listing in cursor]
         except Exception as e:
-            write_log("error", f"[ListingsDatabase] Failed to get listings: {e}")
+            await self.logger.write_log("error", f"Failed to get listings: {e}")
 
 
     async def insert(self, sku: str, listings: list) -> None:
@@ -72,7 +73,7 @@ class ListingsDatabase:
         try:
             await self.db[sku].insert_many(listings)
         except Exception as e:
-            write_log("error", f"[ListingsDatabase] Failed to insert listings: {e}")
+            await self.logger.write_log("error", f"Failed to insert listings: {e}")
 
 
     async def update(self, sku: str, listings: list) -> None:
@@ -86,7 +87,7 @@ class ListingsDatabase:
         try:
             await self.db[sku].update_one({"_id": listings["_id"]}, {"$set": listings}, upsert=True)
         except Exception as e:
-            write_log("error", f"[ListingsDatabase] Failed to update listings: {e}")
+            await self.logger.write_log("error", f"Failed to update listings: {e}")
 
 
     async def delete(self, sku: str, id: str) -> None:
@@ -100,7 +101,7 @@ class ListingsDatabase:
         try:
             await self.db[sku].delete_one({"_id": id})
         except Exception as e:
-            write_log("error", f"[ListingsDatabase] Failed to delete listing: {e}")
+            await self.logger.write_log("error", f"Failed to delete listing: {e}")
 
 
     async def delete_all(self, sku: str) -> None:
@@ -113,7 +114,7 @@ class ListingsDatabase:
         try:
             await self.db[sku].delete_many({})
         except Exception as e:
-            write_log("error", f"[ListingsDatabase] Failed to delete all listings: {e}")
+            await self.logger.write_log("error", f"Failed to delete all listings: {e}")
 
 
 class UsersDatabase:
@@ -122,6 +123,7 @@ class UsersDatabase:
         """
         Initialize the users database.
         """
+        self.logger = AsyncLogger("UsersDatabase")
         self.db = client["backpacktf_users"]
         self.collection = self.db["users"]
 
@@ -134,9 +136,9 @@ class UsersDatabase:
             user (dict): User data.
         """
         try:
-            await self.collection.update_one({"id": user["id"]}, {"$set": user}, upsert=True)
+            await self.collection.update_one({"_id": user["id"]}, {"$set": user}, upsert=True)
         except Exception as e:
-            write_log("error", f"[UsersDatabase] Failed to insert user: {e}")
+            await self.logger.write_log("error", f"Failed to insert user: {e}")
 
         
     async def get(self, steam_id: str) -> dict:
@@ -150,9 +152,9 @@ class UsersDatabase:
             dict: User data.
         """
         try:
-            return await self.collection.find_one({"id": steam_id}, {"_id": False})
+            return await self.collection.find_one({"_id": steam_id}, {"_id": False})
         except Exception as e:
-            write_log("error", f"[UsersDatabase] Failed to get user: {e}")
+            await self.logger.write_log("error", f"Failed to get user: {e}")
 
 
     async def drop_database(self) -> None:
@@ -162,4 +164,4 @@ class UsersDatabase:
         try:
             await self.collection.drop()
         except Exception as e:
-            write_log("error", f"[UsersDatabase] Failed to drop collection: {e}")
+            await self.logger.write_log("error", f"Failed to drop database: {e}")

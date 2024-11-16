@@ -1,9 +1,16 @@
 from utils.config import AUTH_TOKEN
-from utils.log import write_log
+from utils.logger import SyncLogger
 
 
 class AuthorizationToken:
+
+    def __init__(self) -> None:
+        """
+        Initialize the AuthorizationToken class.
+        """
+        self.logger = SyncLogger("AuthorizationToken")
     
+
     def token_valid(self, token: str) -> bool:
         """
         Check if the token is valid.
@@ -21,4 +28,4 @@ class AuthorizationToken:
             else:
                 False
         except Exception as e:
-            write_log("error", f"[AuthorizationToken] Failed to check token: {e}")
+            self.logger.write_log("error", f"Failed to check token: {e}")

@@ -1,13 +1,13 @@
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from data.database import ListingsDatabase, UsersDatabase
 from ws.backpack_tf_ws import BackpackTFWebSocket
+from utils.logger import AsyncLogger, SyncLogger
 from contextlib import asynccontextmanager  
 from utils.token import AuthorizationToken
 from api.backpack_tf import BackpackTFAPI
 from utils.port import PortConfiguration
 from utils.tasks import BackgroundTasks
 from utils.utils import check_sku
-from utils.log import write_log
 from utils.config import *
 import uvicorn
 import asyncio
@@ -18,14 +18,14 @@ bptf = BackpackTFAPI()
 users_db = UsersDatabase()
 bptf_ws = BackpackTFWebSocket()
 listings_db = ListingsDatabase()
-port_config = PortConfiguration()
 auth_token = AuthorizationToken()
 background_tasks = BackgroundTasks()
+async_logger = AsyncLogger("FastAPI")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    write_log("info", "Starting API server lifespan")
+    await async_logger.write_log("info", "Starting API server lifespan")
     if not SAVE_USER_DATA:
         await users_db.drop_database()
 
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
         background_tasks.refresh_listings()
         )
     yield
-    write_log("info", "Ending API server lifespan")
+    await async_logger.write_log("info", "Stopping API server lifespan")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -61,7 +61,7 @@ async def get_listings(request: Request, sku: str):
         
         return listings
     except Exception as e:
-        write_log("error", f"Failed to get listings: {e}")
+        await async_logger.write_log("error", f"Failed to get listings: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
     
 
@@ -78,7 +78,7 @@ async def delete_listings(request: Request, sku: str):
         await listings_db.delete_all(sku)
         return {"success": True}
     except Exception as e:
-        write_log("error", f"Failed to delete listings: {e}")
+        await async_logger.write_log("error", f"Failed to delete listings: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
     
 
@@ -95,7 +95,7 @@ async def get_user(request: Request, steamid: str):
         user = await users_db.get(steamid)
         return user
     except Exception as e:
-        write_log("error", f"Failed to get user: {e}")
+        await async_logger.write_log("error", f"Failed to get user: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
     
 
@@ -105,6 +105,8 @@ class ConnectionManager:
         """
         Initialize the connection manager.
         """
+        self.async_logger = AsyncLogger("ConnectionManager")
+        self.sync_logger = SyncLogger("ConnectionManager")
         self.active_connections: list[WebSocket] = []
 
 
@@ -119,7 +121,7 @@ class ConnectionManager:
             await websocket.accept()
             self.active_connections.append(websocket)
         except Exception as e:
-            write_log("error", f"[ConnectionManager] Failed to connect: {e}")
+            await self.async_logger.write_log("error", f"Failed to connect: {e}")
 
 
     def disconnect(self, websocket: WebSocket) -> None:
@@ -132,7 +134,7 @@ class ConnectionManager:
         try:
             self.active_connections.remove(websocket)
         except Exception as e:
-            write_log("error", f"[ConnectionManager] Failed to disconnect: {e}")
+            self.sync_logger.write_log("error", f"Failed to disconnect: {e}")
 
 
     async def broadcast(self, message: dict) -> None:
@@ -147,10 +149,10 @@ class ConnectionManager:
                 try:
                     await connection.send_text(json.dumps(message))
                 except Exception as e:
-                    write_log("error", f"[ConnectionManager] Failed to broadcast message: {e}")
+                    await self.async_logger.write_log("error", f"Failed to broadcast: {e}")
                     self.disconnect(connection)
         except Exception as e:
-            write_log("error", f"[ConnectionManager] Failed to broadcast: {e}")
+            await self.async_logger.write_log("error", f"Failed to broadcast: {e}")
 
 
 manager = ConnectionManager()
@@ -172,22 +174,24 @@ async def websocket_endpoint(websocket: WebSocket):
     
 
 if __name__ == "__main__":
+    sync_logger = SyncLogger("FastAPI")
+
     if not DATABASE_URL:
-        write_log("error", "Database URL is not set.")
+        sync_logger.write_log("error", "Database URL is not set.")
         exit(1)
 
     if not BPTF_TOKEN:
-        write_log("error", "Backpack.TF token is not set.")
+        sync_logger.write_log("error", "Backpack.TF token is not set.")
         exit(1)
 
     if not STEAM_API_KEY:
-        write_log("error", "Steam API key is not set.")
+        sync_logger.write_log("error", "Steam API key is not set.")
         exit(1)
 
-    port = port_config.get_port()
+    port = PortConfiguration().get_port()
     if not port:
-        write_log("error", "No available port found.")
+        sync_logger.write_log("error", "No available port found.")
         exit(1)
 
-    write_log("info", f"Starting the API server on port {port}.")
+    sync_logger.write_log("info", f"Starting the API server on port {port}.")
     uvicorn.run(app, host="127.0.0.1", port=port)
