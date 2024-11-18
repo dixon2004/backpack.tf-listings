@@ -3,7 +3,7 @@ from utils.logger import AsyncLogger
 import motor.motor_asyncio
 
 
-client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URL)
+client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URL, maxPoolSize=200, minPoolSize=10)
 
 
 class ListingsDatabase:
@@ -57,7 +57,7 @@ class ListingsDatabase:
         """
         try:
             cursor = self.db[sku].find({}, {"_id": False})
-            return [listing async for listing in cursor]
+            return await cursor.to_list(length=None)
         except Exception as e:
             await self.logger.write_log("error", f"Failed to get listings: {e}")
 

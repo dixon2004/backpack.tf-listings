@@ -9,9 +9,11 @@ from utils.port import PortConfiguration
 from utils.tasks import BackgroundTasks
 from utils.utils import check_sku
 from utils.config import *
+import logging
 import uvicorn
 import asyncio
 import json
+import sys
 
 
 bptf = BackpackTFAPI()
@@ -25,6 +27,12 @@ async_logger = AsyncLogger("FastAPI")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Lifespan event handler for the FastAPI application.
+
+    Args:
+        app (FastAPI): FastAPI application.
+    """
     await async_logger.write_log("info", "Starting API server lifespan")
     if not SAVE_USER_DATA:
         await users_db.drop_database()
@@ -42,7 +50,17 @@ app = FastAPI(lifespan=lifespan)
         
 
 @app.get("/listings")
-async def get_listings(request: Request, sku: str):
+async def get_listings(request: Request, sku: str) -> list:
+    """
+    Get listings for a specific item.
+    
+    Args:
+        request (Request): Request object.
+        sku (str): SKU of the item.
+        
+    Returns:
+        list: List of listings.
+    """
     try:
         token = request.headers.get("Authorization", "")
         if not auth_token.token_valid(token):
@@ -66,7 +84,17 @@ async def get_listings(request: Request, sku: str):
     
 
 @app.delete("/listings/{sku}")
-async def delete_listings(request: Request, sku: str):
+async def delete_listings(request: Request, sku: str) -> dict:
+    """
+    Delete listings for a specific item.
+    
+    Args:
+        request (Request): Request object.
+        sku (str): SKU of the item.
+    
+    Returns:
+        dict: Response message.
+    """
     try:
         token = request.headers.get("Authorization", "")
         if not auth_token.token_valid(token):
@@ -83,7 +111,17 @@ async def delete_listings(request: Request, sku: str):
     
 
 @app.get("/user")
-async def get_user(request: Request, steamid: str):
+async def get_user(request: Request, steamid: str) -> dict:
+    """
+    Get user data.
+    
+    Args:
+        request (Request): Request object.
+        steamid (str): SteamID of the user.
+    
+    Returns:
+        dict: User data.
+    """
     try:
         token = request.headers.get("Authorization", "")
         if not auth_token.token_valid(token):
@@ -159,7 +197,13 @@ manager = ConnectionManager()
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket) -> None:
+    """
+    WebSocket endpoint.
+    
+    Args:
+        websocket (WebSocket): WebSocket connection.
+    """
     await manager.connect(websocket)
     try:
         while True:
@@ -171,27 +215,32 @@ async def websocket_endpoint(websocket: WebSocket):
             bptf_ws.updated_listings.clear()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-    
+
 
 if __name__ == "__main__":
-    sync_logger = SyncLogger("FastAPI")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler()],
+    )
+    logger = logging.getLogger()
 
     if not DATABASE_URL:
-        sync_logger.write_log("error", "Database URL is not set.")
-        exit(1)
+        logger.error("Missing configuration: DATABASE_URL is not set.")
+        sys.exit(1)
 
     if not BPTF_TOKEN:
-        sync_logger.write_log("error", "Backpack.TF token is not set.")
-        exit(1)
+        logger.error("Missing configuration: Backpack.TF token (BPTF_TOKEN) is not set.")
+        sys.exit(1)
 
     if not STEAM_API_KEY:
-        sync_logger.write_log("error", "Steam API key is not set.")
-        exit(1)
+        logger.error("Missing configuration: Steam API key (STEAM_API_KEY) is not set.")
+        sys.exit(1)
 
     port = PortConfiguration().get_port()
     if not port:
-        sync_logger.write_log("error", "No available port found.")
-        exit(1)
+        logger.error("No available port found.")
+        sys.exit(1)
 
-    sync_logger.write_log("info", f"Starting the API server on port {port}.")
+    logger.info(f"Starting the FastAPI server on port {port}...")
     uvicorn.run(app, host="127.0.0.1", port=port)
