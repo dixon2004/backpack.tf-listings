@@ -1,5 +1,5 @@
 from data.database import ListingsDatabase
-from utils.logger import AsyncLogger
+from utils.logger import SyncLogger
 from utils.config import BPTF_TOKEN
 from utils.utils import *
 import aiohttp
@@ -15,7 +15,7 @@ class BackpackTFAPI:
         """
         self.url = "https://backpack.tf/api"
 
-        self.logger = AsyncLogger("BackpackTFAPI")
+        self.logger = SyncLogger("BackpackTFAPI")
         self.listings_db = ListingsDatabase()
 
 
@@ -36,7 +36,7 @@ class BackpackTFAPI:
                     await asyncio.sleep(1)
                     return await response.json()
         except Exception as e:
-            await self.logger.write_log("error", f"Failed to call API: {e}")
+            self.logger.write_log("error", f"Failed to call API: {e}")
 
 
     async def fetch_snapshots(self, name: str) -> list:
@@ -58,7 +58,7 @@ class BackpackTFAPI:
             response = await self.call(f"{self.url}/classifieds/listings/snapshot", params)
             return response
         except Exception as e:
-            await self.logger.write_log("error", f"Failed to fetch snapshots: {e}")
+            self.logger.write_log("error", f"Failed to fetch snapshots: {e}")
 
 
     async def format_listing(self, listing: dict) -> dict:
@@ -132,7 +132,7 @@ class BackpackTFAPI:
 
             return data
         except Exception as e:
-            await self.logger.write_log("error", f"Failed to format listing ({listing}): {e}")
+            self.logger.write_log("error", f"Failed to format listing ({listing}): {e}")
 
 
     async def get_listings(self, sku: str) -> list:
@@ -173,4 +173,4 @@ class BackpackTFAPI:
 
             return formatted_listings
         except Exception as e:
-            await self.logger.write_log("error", f"Failed to get listings: {e}")
+            self.logger.write_log("error", f"Failed to get listings: {e}")
