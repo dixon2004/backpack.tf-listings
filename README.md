@@ -6,21 +6,19 @@
 
 ## Key Features
 
-- **Real-time Data Updates**: Establishes websocket connections to receive live updates on item listings in Team Fortress 2.
-- **RESTful API**: Offers well-defined endpoints for fetching and managing listings and user data.
-- **High Performance**: Capable of processing over 10,000 listings in under a minute, ensuring efficient data handling.
-- **User Authentication**: Supports optional authorization tokens for secure API access.
+- **Real-time Data Updates**: Establishes websocket connections to receive live updates on item listings.
+- **RESTful API**: Provides structured endpoints for retrieving and managing listings and user data.
+- **High Performance**: Optimized to process over 10,000 listings per minute with minimal latency.
+- **Secure API Access**: Supports optional authentication via authorization tokens.
+- **Scalable & Dockerized**: Easily deploy the application using Docker and Docker Compose.
 
 ## Table of Contents
 
 1. [Installation](#installation)
-   - [Prerequisites](#prerequisites)
+   - [Prerequisites](#prerequisites)  
    - [Clone the Repository](#clone-the-repository)
-   - [Set Up a Virtual Environment](#set-up-a-virtual-environment)
-   - [Install Dependencies](#install-dependencies)
-   - [Environment Variables](#environment-variables)
-   - [Run the Application](#run-the-application)
-   - [Optional: PM2 Setup for Linux Users](#optional-pm2-setup-for-linux-users)
+   - [Set Up Environment Variables](#set-up-environment-variables)
+   - [Run with Docker](#run-with-docker)
 2. [API Usage](#api-usage)
    - [Get Listings](#get-listings)
    - [Delete Listings](#delete-listings)
@@ -38,7 +36,7 @@
 
 Ensure you have the following installed:
 
-- **Python 3.8** or higher.
+- **Docker** and **Docker Compose**
 
 ### Clone the Repository
 
@@ -49,90 +47,53 @@ git clone https://github.com/dixon2004/backpack.tf-listings.git
 cd backpack.tf-listings
 ```
 
-### Set Up a Virtual Environment
+### Set Up Environment Variables
 
-Create and activate a virtual environment to manage dependencies:
+1. Rename `template.env` to `.env` in the root directory.
 
-- **Linux/macOS**:
-  ```bash
-  python3 -m venv venv
-  source venv/bin/activate
-  ```
+2. Open `.env` and set the following environment variables:
+    
+    ```bash
+    AUTH_TOKEN = "your_auth_token_here"
+    BPTF_TOKEN = "your_backpacktf_token_here" # Multiple tokens can be separated by commas
+    SAVE_USER_DATA = False
+    STEAM_API_KEY = "your_steam_api_key_here"
+    ```
 
-- **Windows**:
-  ```bash
-  python -m venv venv
-  .\venv\Scripts\activate
-  ```
+    - `AUTH_TOKEN`: Optionally specify an authorization token for API access. If left empty, authentication is disabled, allowing unrestricted access.
+    - `BPTF_TOKEN`: Your Backpack.tf API token, obtainable from [here](https://backpack.tf/connections).
+    - `SAVE_USER_DATA`: Set to `True` to enable saving user data in the database (Default is False). 
+    - `STEAM_API_KEY`: Your Steam API key, obtainable from [here](https://steamcommunity.com/dev/apikey).
 
-### Install Dependencies
+### Run with Docker
 
-Install the necessary Python packages using:
+1. **Build and Start the Service**:
 
-```bash
-pip install -r requirements.txt
-```
+    ```bash
+    docker-compose up --build -d
+    ```
+    This will build the necessary Docker image and start the application as a background service on port 8000.
 
-### Environment Variables
+2. **Stopping the Service**:
 
-Set the following environment variables before running the application:
+    To stop and remove the running containers, execute:
+    ```bash
+    docker-compose down
+    ```
 
-- `DATABASE_URL`: MongoDB connection string (e.g., `mongodb://localhost:27017`).
-- `BPTF_TOKEN`: Your Backpack.tf API token, obtainable from [here](https://backpack.tf/connections).
-- `STEAM_API_KEY`: Your Steam API key, obtainable from [here](https://steamcommunity.com/dev/apikey).
-- `AUTH_TOKEN`: Optionally specify an authorization token for API access. If left empty, no token will be required.
-- `SAVE_USER_DATA`: Set to `true` to enable saving user data in the database (default is false). 
-- `SERVER_PORT`: Define the port number for the API (default is 8000).
+3. **Restarting the Service**:
 
-### Run the Application
+    If you need to restart the service after making changes to the environment variables or code:
+    ```bash
+    docker-compose down && docker-compose up --build -d
+    ```
 
-Start the application by executing:
+4. **Checking Logs**:
 
-```bash
-python src/main.py
-```
-
-### Optional: PM2 Setup for Linux Users
-
-**PM2** is a process manager that simplifies application management, including automatic restarts and log handling.
-
-#### Install PM2
-
-Install PM2 globally via npm:
-
-```bash
-npm install pm2 -g
-```
-
-#### Start the Application with PM2
-
-Run the application as a background service using PM2:
-
-```bash
-pm2 start src/main.py --name backpack-tf-listings --interpreter python3
-```
-
-#### Configure Log Rotation
-
-For details on setting up log rotation with PM2, refer to the [PM2 Logrotate Documentation](https://github.com/keymetrics/pm2-logrotate).
-
-#### Enable PM2 on System Startup
-
-Ensure PM2 restarts automatically on boot:
-
-```bash
-pm2 startup
-pm2 save
-```
-
-#### Monitor the Application
-
-Monitor the application’s status and logs with:
-
-```bash
-pm2 status
-pm2 logs
-```
+    To monitor the service logs in real-time:
+    ```bash
+    docker-compose logs -f
+    ```
 
 ---
 
@@ -145,7 +106,7 @@ The **Backpack.tf Listings** application provides a RESTful API with the followi
 - **Endpoint**: `GET /listings`
 - **Query Parameters**:
   - `sku`: The SKU of the item for which to fetch listings.
-- **Authorization**: A valid authorization token is required if specified in the `options.json` file.
+- **Authorization**: A valid authorization token is required if `AUTH_TOKEN` is set in the environment variables.
 - **Response**: Returns listings data in JSON format.
 
 **Example Request**:
@@ -158,7 +119,7 @@ curl -H "Authorization: YOUR_AUTH_TOKEN" "http://localhost:8000/listings?sku=YOU
 - **Endpoint**: `DELETE /listings/{sku}`
 - **Query Parameters**:
   - `sku`: The SKU of the item for which to delete all listings.
-- **Authorization**: A valid authorization token is required if specified in the `options.json` file.
+- **Authorization**: A valid authorization token is required if `AUTH_TOKEN` is set in the environment variables.
 - **Response**: Returns a success message in JSON format.
 
 **Example Request**:
@@ -171,7 +132,7 @@ curl -X DELETE -H "Authorization: YOUR_AUTH_TOKEN" "http://localhost:8000/listin
 - **Endpoint**: `GET /user`
 - **Query Parameters**:
   - `steamid`: The Steam ID of the user to retrieve.
-- **Authorization**: A valid authorization token is required if specified in the `options.json` file.
+- **Authorization**: A valid authorization token is required if `AUTH_TOKEN` is set in the environment variables.
 - **Response**: Returns user data in JSON format.
 
 **Example Request**:

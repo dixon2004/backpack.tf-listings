@@ -1,9 +1,8 @@
 from utils.config import STEAM_API_KEY
 from tf2utilities.main import TF2
-import re
 
 
-tf2 = TF2(STEAM_API_KEY, autoUpdate=True).schema
+tf2 = TF2(STEAM_API_KEY, auto_update=True).schema
 
 
 spells_attributes = {
@@ -144,38 +143,3 @@ killstreak_effects_attributes = {
     2007: "Incinerator",
     2008: "Hypno-Beam"
 }
-
-
-def get_spell_id(spell_name: str) -> tuple:
-    """
-    Get spell ID from spell name.
-
-    Args:
-        spell_name (str): Name of the spell.
-
-    Returns:
-        tuple: Spell category and spell ID.
-    """
-    for spell_category, spells in spells_attributes.items():
-        for spell_id, spell in spells.items():
-            if spell.lower() == spell_name.lower():
-                return spell_category, spell_id
-    return None, None
-
-
-def check_sku(sku: str) -> bool:
-    """
-    Check if SKU is valid.
-
-    Args:
-        sku (str): SKU of the item.
-
-    Returns:
-        bool: True if SKU is valid, False otherwise.
-    """
-    if (
-        bool(re.match("^(\d+);([0-9]|[1][0-5])(;((uncraftable)|(untrad(e)?able)|(australium)|(festive)|(strange)|((u|pk|td-|c|od-|oq-|p)\d+)|(w[1-5])|(kt-[1-3])|(n((100)|[1-9]\d?))))*?$", sku))
-    ):
-        return True
-    else:
-        return False

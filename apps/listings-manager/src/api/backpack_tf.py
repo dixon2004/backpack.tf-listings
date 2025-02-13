@@ -1,10 +1,11 @@
-from data.database import ListingsDatabase
+from database.listings import ListingsDatabase
 from utils.logger import SyncLogger
 from utils.config import BPTF_TOKEN
 from utils.utils import *
 import aiohttp
 import asyncio
 import random
+import time
 
 
 class BackpackTFAPI:
@@ -14,9 +15,11 @@ class BackpackTFAPI:
         Initialize the BackpackTFAPI class.
         """
         self.url = "https://backpack.tf/api"
+        self.tokens = BPTF_TOKEN
+        self.rate_limit = {}
 
         self.logger = SyncLogger("BackpackTFAPI")
-        self.listings_db = ListingsDatabase()
+        self.db = ListingsDatabase()
 
 
     async def call(self, url: str, params: dict) -> dict:
@@ -30,13 +33,47 @@ class BackpackTFAPI:
         Returns:
             dict: API response.
         """
-        try:
-            async with aiohttp.ClientSession(raise_for_status=True) as session:
-                async with session.get(url, params=params, timeout=10) as response:
-                    await asyncio.sleep(1)
-                    return await response.json()
-        except Exception as e:
-            self.logger.write_log("error", f"Failed to call API: {e}")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=10) as response:
+                if response.status == 429:
+                    self.rate_limit[params["token"]] = time.time() + 30
+                    raise Exception("Rate limit exceeded")
+            
+                response.raise_for_status()
+                return await response.json()
+
+
+    async def get_available_tokens(self) -> list:
+        """
+        Get available tokens, waiting for rate-limited tokens if necessary.
+        
+        Returns:
+            list: List of available tokens.
+        """
+        max_attempts = 3
+        loop = 0
+
+        while loop < max_attempts:
+            current_time = time.time()
+            
+            # Remove expired rate-limited tokens
+            self.rate_limit = {token: expiry for token, expiry in self.rate_limit.items() if expiry > current_time}
+
+            # Get available tokens
+            available_tokens = [token for token in self.tokens if token not in self.rate_limit]
+            if available_tokens:
+                return available_tokens
+
+            # Wait for rate-limited tokens
+            if self.rate_limit:
+                shortest_cooldown = (min(self.rate_limit.values()) - current_time) + 1
+                await asyncio.sleep(shortest_cooldown)
+            else:
+                raise Exception("No tokens are available and no tokens are rate-limited")
+
+            loop += 1
+
+        raise Exception("Rate limit exceeded after maximum attempts")
 
 
     async def fetch_snapshots(self, name: str) -> list:
@@ -50,10 +87,11 @@ class BackpackTFAPI:
             list: List of snapshots.
         """
         try:
+            available_tokens = await self.get_available_tokens()
             params = {
                 "sku": name,
                 "appid": "440",
-                "token": random.choice(BPTF_TOKEN)
+                "token": random.choice(available_tokens)
             }
             response = await self.call(f"{self.url}/classifieds/listings/snapshot", params)
             return response
@@ -148,7 +186,7 @@ class BackpackTFAPI:
             if "None" in sku:
                 raise Exception("Invalid item SKU.")
 
-            item_name = tf2.getNameFromSku(sku)
+            item_name = tf2.get_name_from_sku(sku)
             if not item_name:
                 raise Exception("Invalid item name.")
 
@@ -161,15 +199,19 @@ class BackpackTFAPI:
                 raise Exception("No listings found.")
             
             formatted_listings = []
+            listing_ids = []
             for listing in listings:
                 formatted_listing = await self.format_listing(listing)
                 if formatted_listing:
                     formatted_listing["sku"] = sku
                     formatted_listing["name"] = item_name
-                    formatted_listings.append(formatted_listing)
 
-            await self.listings_db.delete_all(sku)
-            await self.listings_db.insert(sku, formatted_listings)
+                    if formatted_listing["_id"] not in listing_ids:
+                        formatted_listings.append(formatted_listing)
+                        listing_ids.append(formatted_listing["_id"])
+
+            await self.db.delete_all(sku)
+            await self.db.insert(sku, formatted_listings)
 
             return formatted_listings
         except Exception as e:

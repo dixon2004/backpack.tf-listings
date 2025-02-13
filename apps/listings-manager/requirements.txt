@@ -1,0 +1,6 @@
+tf2-utilities
+python-dotenv
+uvicorn
+aiohttp
+fastapi
+motor

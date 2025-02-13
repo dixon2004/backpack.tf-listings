@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  listings-manager:
+    build:
+      context: ./apps/listings-manager
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
+    working_dir: /apps/listings-manager/src
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mongodb://mongodb:27017/
+      BPTF_TOKEN: ${BPTF_TOKEN}
+      STEAM_API_KEY: ${STEAM_API_KEY}
+      WS_MANAGER_URL: http://ws-manager:8002
+    networks:
+      - app-network
+    depends_on:
+      - mongodb
+      - ws-manager
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8001/health"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  listings-service:
+    build:
+      context: ./apps/listings-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    working_dir: /apps/listings-service/src
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mongodb://mongodb:27017/
+      WS_MANAGER_URL: http://ws-manager:8002
+      LISTINGS_MANAGER_URL: http://listings-manager:8001
+      AUTH_TOKEN: ${AUTH_TOKEN}
+      STEAM_API_KEY: ${STEAM_API_KEY}
+      SAVE_USER_DATA: ${SAVE_USER_DATA}
+    networks:
+      - app-network
+    depends_on:
+      - mongodb
+      - ws-manager
+      - listings-manager
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  ws-manager:
+    build:
+      context: ./apps/ws-manager
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8002
+    working_dir: /apps/ws-manager/src
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mongodb://mongodb:27017/
+      STEAM_API_KEY: ${STEAM_API_KEY}
+      SAVE_USER_DATA: ${SAVE_USER_DATA}
+    networks:
+      - app-network
+    depends_on:
+      - mongodb
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8002/health"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  mongodb:
+    image: mongodb/mongodb-community-server:5.0-ubuntu2004
+    container_name: mongodb
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 5s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

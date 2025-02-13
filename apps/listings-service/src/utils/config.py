@@ -3,9 +3,9 @@ import os
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-BPTF_TOKEN = os.getenv("BPTF_TOKEN", "").split(",")
-STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
+DATABASE_URL = os.getenv("DATABASE_URL")
+LISTINGS_MANAGER_URL = os.getenv("LISTINGS_MANAGER_URL")
+STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 SAVE_USER_DATA = os.getenv("SAVE_USER_DATA", "false").lower() == "true"
-SERVER_PORT = int(os.getenv("SERVER_PORT", 3000))
+WS_MANAGER_URL = os.getenv("WS_MANAGER_URL")

@@ -1,11 +1,13 @@
-from data.database import ListingsDatabase, UsersDatabase
+from database.listings import ListingsDatabase
+from utils.queue import ListingsQueueService
+from utils.utils import tf2, get_spell_id
+from database.users import UsersDatabase
 from utils.config import SAVE_USER_DATA
+from utils.cache import CacheService
 from utils.logger import SyncLogger
-from collections import deque
-from utils.utils import *
 import websockets
 import asyncio
-import json
+import orjson
 import time
 import math
 
@@ -18,11 +20,13 @@ class BackpackTFWebSocket:
         """
         self.ws_url = 'wss://ws.backpack.tf/events'
         self.headers = {'appid': 440, 'batch-test': True}
+        self.save_user_data = SAVE_USER_DATA
+        self.updated_items = []
         
-        self.queue = deque()
-        self.updated_listings = []
 
         self.logger = SyncLogger("BackpackTFWebSocket")
+        self.queue = ListingsQueueService()
+        self.cache = CacheService()
         self.listings_db = ListingsDatabase()
         self.users_db = UsersDatabase()
 
@@ -41,12 +45,12 @@ class BackpackTFWebSocket:
                     ping_timeout=120
                     ):
                     async for messages in websocket:
-                        messages = json.loads(messages)
+                        messages = orjson.loads(messages)
                         if isinstance(messages, list):
-                            self.queue.extend(messages)
+                            self.queue.add_updates(messages)
                             self.logger.write_log("info", f"Received {len(messages)} messages")
                             
-                        sleep_time = math.ceil(len(self.queue) / 2000)
+                        sleep_time = math.ceil(self.queue.count_updates() / 2000)
                         if sleep_time > 0:
                             await asyncio.sleep(sleep_time)
             except websockets.exceptions.ConnectionClosedError:
@@ -66,23 +70,25 @@ class BackpackTFWebSocket:
         while True:
             try:
                 await asyncio.sleep(1)
-                if self.queue:
-                    batch = [self.queue.popleft() for _ in range(min(len(self.queue), 2000))]
+                updates_in_queue = self.queue.count_updates()
+                if updates_in_queue > 0:
+                    batch = self.queue.get_updates()
                     if not batch:
                         continue
 
-                    self.logger.write_log("info", f"Processing {len(batch)} messages, left {len(self.queue)} messages")
+                    self.logger.write_log("info", f"Processing {len(batch)} messages, left {updates_in_queue} messages")
                     start_time = time.time()
                     for message in batch:
                         try:
-                            await asyncio.sleep(0.002)
                             payload = message['payload']
                             item = payload['item']
                             item_name = item['name']
-                            item_sku = tf2.getSkuFromName(item_name)
-
-                            if not await self.listings_db.check_collection(item_sku):
+                            if not await self.cache.check_item_exists(item_name):
                                 continue
+
+                            item_sku = self.cache.get_sku_from_name(item_name)
+                            if not item_sku:
+                                item_sku = tf2.get_sku_from_name(item_name)
 
                             currencies = payload['currencies']
                             if "usd" in currencies:
@@ -139,11 +145,13 @@ class BackpackTFWebSocket:
                                 data["sheen"] = {"id": item["sheen"]["id"], "name": item["sheen"]["name"]}
 
                             await self.listings_db.update(item_sku, data)
-                            
-                            if item_sku not in [listing["sku"] for listing in self.updated_listings]:
-                                self.updated_listings.append({"sku": item_sku, "name": item_name})
 
-                            if SAVE_USER_DATA and payload.get("user"):
+                            if item_sku not in [i["sku"] for i in self.updated_items]:
+                                self.updated_items.append({"sku": item_sku, "name": item_name})
+
+                            self.logger.write_log("info", f"Updated listing ({listing_id}) for {item_name}")
+
+                            if self.save_user_data and payload.get("user"):
                                 payload["user"]["_id"] = payload["user"]["id"]
                                 await self.users_db.insert(payload["user"])
                         except Exception as e:

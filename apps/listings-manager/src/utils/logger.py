@@ -14,7 +14,7 @@ class SyncLogger:
             log_level (str): The logging level (default is "INFO").
         """
         self.class_name = class_name
-        self.log_path = "./logs"
+        self.log_path = "../logs"
         os.makedirs(self.log_path, exist_ok=True)
 
         self.log_level = getattr(logging, log_level.upper(), logging.INFO)
@@ -22,7 +22,7 @@ class SyncLogger:
 
         self.logger_info = None
         self.logger_error = None
-        self.backup_count = 7
+        self.backup_count = 3
 
 
     def _setup_logger(self, name: str, log_file: str, log_level: int) -> logging.Logger:

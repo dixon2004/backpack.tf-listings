@@ -1,27 +1,25 @@
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from data.database import ListingsDatabase, UsersDatabase
-from ws.backpack_tf_ws import BackpackTFWebSocket
+from api.listings_manager import ListingsManager
+from database.listings import ListingsDatabase
+from api.ws_manager import WebsocketManager
 from contextlib import asynccontextmanager  
 from utils.token import AuthorizationToken
-from api.backpack_tf import BackpackTFAPI
-from utils.port import PortConfiguration
-from utils.tasks import BackgroundTasks
+from database.users import UsersDatabase
+from utils.config import SAVE_USER_DATA
+from utils.cache import CacheService
 from utils.logger import SyncLogger
-from utils.utils import check_sku
-from utils.config import *
-import uvicorn
+from utils.utils import tf2
 import asyncio
 import json
-import sys
 
 
-bptf = BackpackTFAPI()
-users_db = UsersDatabase()
-logger = SyncLogger("FastAPI")
-bptf_ws = BackpackTFWebSocket()
-listings_db = ListingsDatabase()
+logger = SyncLogger("ListingsServiceAPI")
+listings_manager = ListingsManager()
 auth_token = AuthorizationToken()
-background_tasks = BackgroundTasks()
+listings_db = ListingsDatabase()
+ws_manager = WebsocketManager()
+users_db = UsersDatabase()
+cache = CacheService()
 
 
 @asynccontextmanager
@@ -35,17 +33,29 @@ async def lifespan(app: FastAPI):
     logger.write_log("info", "Starting API server lifespan")
     if not SAVE_USER_DATA:
         await users_db.drop_database()
+        logger.write_log("info", "Saving user data is disabled, dropped the users database.")
 
-    asyncio.gather(
-        bptf_ws.connect(), 
-        bptf_ws.handle_messages(),
-        background_tasks.refresh_listings()
-        )
     yield
     logger.write_log("info", "Stopping API server lifespan")
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+async def health_check() -> dict:
+    """
+    Health check endpoint.
+
+    Returns:
+        dict: Health check response.
+    """
+    try:
+        logger.write_log("info", "Health check successful")
+        return {"status": "ok"}
+    except Exception as e:
+        logger.write_log("error", f"Failed to perform health check: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
         
 
 @app.get("/listings")
@@ -65,17 +75,18 @@ async def get_listings(request: Request, sku: str) -> list:
         if not auth_token.token_valid(token):
             raise HTTPException(status_code=401, detail="Unauthorized.")
 
-        if not check_sku(sku):
+        if not tf2.test_sku(sku):
             raise HTTPException(status_code=400, detail="Invalid SKU.")
         
-        if await listings_db.check_collection(sku):
+        if await cache.check_item_exists(sku):
             listings = await listings_db.get(sku)
         else:
-            listings = await bptf.get_listings(sku)
+            cache.add_item(sku)
+            listings = await listings_manager.get_listings(sku)
 
         if not listings:
             raise HTTPException(status_code=404, detail="Listings not found.")
-        
+
         return listings
     except Exception as e:
         logger.write_log("error", f"Failed to get listings: {e}")
@@ -99,9 +110,10 @@ async def delete_listings(request: Request, sku: str) -> dict:
         if not auth_token.token_valid(token):
             raise HTTPException(status_code=401, detail="Unauthorized.")
 
-        if not check_sku(sku):
+        if not tf2.test_sku(sku):
             raise HTTPException(status_code=400, detail="Invalid SKU.")
         
+        cache.remove_item(sku)
         await listings_db.delete_all(sku)
         return {"success": True}
     except Exception as e:
@@ -156,6 +168,7 @@ class ConnectionManager:
         try:
             await websocket.accept()
             self.active_connections.append(websocket)
+            self.logger.write_log("info", f"{websocket.client.host} connected")
         except Exception as e:
             self.logger.write_log("error", f"Failed to connect: {e}")
 
@@ -168,7 +181,9 @@ class ConnectionManager:
             websocket (WebSocket): WebSocket connection.
         """
         try:
-            self.active_connections.remove(websocket)
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+            self.logger.write_log("info", f"{websocket.client.host} disconnected")
         except Exception as e:
             self.logger.write_log("error", f"Failed to disconnect: {e}")
 
@@ -185,7 +200,7 @@ class ConnectionManager:
                 try:
                     await connection.send_text(json.dumps(message))
                 except Exception as e:
-                    self.logger.write_log("error", f"Failed to broadcast: {e}")
+                    self.logger.write_log("error", f"Failed to broadcast: {e or 'Unknown error'}")
                     self.disconnect(connection)
         except Exception as e:
             self.logger.write_log("error", f"Failed to broadcast: {e}")
@@ -206,32 +221,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     try:
         while True:
             await asyncio.sleep(1)
-            if not bptf_ws.updated_listings:
+            item_updates = await ws_manager.get_item_updates()
+            if not item_updates:
                 continue
 
-            await manager.broadcast(bptf_ws.updated_listings)
-            bptf_ws.updated_listings.clear()
+            await manager.broadcast(item_updates)
+            logger.write_log("info", f"Item updates broadcasted: {len(item_updates)} items")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
-
-if __name__ == "__main__":
-    if not DATABASE_URL:
-        logger.write_log("error", "Missing configuration: DATABASE_URL is not set.")
-        sys.exit(1)
-
-    if not BPTF_TOKEN:
-        logger.write_log("error", "Missing configuration: Backpack.tf token (BPTF_TOKEN) is not set.")
-        sys.exit(1)
-
-    if not STEAM_API_KEY:
-        logger.write_log("error", "Missing configuration: Steam API key (STEAM_API_KEY) is not set.")
-        sys.exit(1)
-
-    port = PortConfiguration().get_port()
-    if not port:
-        logger.write_log("error", "Missing configuration: PORT is not set.")
-        sys.exit(1)
-
-    logger.write_log("info", f"Starting API server on port {port}")
-    uvicorn.run(app, host="127.0.0.1", port=port)

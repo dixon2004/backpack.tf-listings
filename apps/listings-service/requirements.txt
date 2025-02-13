@@ -1,7 +1,6 @@
-websockets==13.1
+uvicorn[standard]
 python-dotenv
 tf2-utilities
-uvicorn
 aiohttp
 fastapi
 motor
