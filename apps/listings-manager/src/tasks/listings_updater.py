@@ -40,7 +40,7 @@ class ListingsUpdater:
                     try:
                         listings = await self.bptf.get_listings(sku)
                         if not listings:
-                            raise Exception("No listings found.")
+                            raise Exception("No available listings found")
                         
                         await self.ws_manager.remove_updates_from_queue(sku)
 

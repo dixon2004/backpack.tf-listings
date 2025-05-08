@@ -1,3 +1,4 @@
+from utils.rate_limiter import SmartRateLimiter
 from database.listings import ListingsDatabase
 from utils.logger import SyncLogger
 from utils.config import BPTF_TOKEN
@@ -19,6 +20,7 @@ class BackpackTFAPI:
         self.rate_limit = {}
 
         self.logger = SyncLogger("BackpackTFAPI")
+        self.rate_limiter = SmartRateLimiter()
         self.db = ListingsDatabase()
 
 
@@ -33,47 +35,46 @@ class BackpackTFAPI:
         Returns:
             dict: API response.
         """
+        token = params["token"]
+        await self.rate_limiter.wait_for_token(token)
+
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params, timeout=10) as response:
                 if response.status == 429:
-                    self.rate_limit[params["token"]] = time.time() + 30
+                    self.rate_limiter.apply_rate_limit(token)
                     raise Exception("Rate limit exceeded")
+
+                if 500 <= response.status < 600:
+                    await asyncio.sleep(60)
+                    raise Exception(f"Server error {response.status}")
             
                 response.raise_for_status()
+                self.rate_limiter.reset_token(token)
                 return await response.json()
 
 
-    async def get_available_tokens(self) -> list:
+    async def get_token(self) -> str:
         """
-        Get available tokens, waiting for rate-limited tokens if necessary.
-        
+        Get an available token that is not in cooldown.
+        If all tokens are in cooldown, return the one with the shortest remaining cooldown.
+
         Returns:
-            list: List of available tokens.
+            str: A usable token.
         """
-        max_attempts = 3
-        loop = 0
+        current_time = time.time()
+        available_tokens = [
+            token for token in self.tokens
+            if token not in self.rate_limiter.token_states
+            or self.rate_limiter.token_states[token]["cooldown_until"] <= current_time
+        ]
 
-        while loop < max_attempts:
-            current_time = time.time()
-            
-            # Remove expired rate-limited tokens
-            self.rate_limit = {token: expiry for token, expiry in self.rate_limit.items() if expiry > current_time}
+        if available_tokens:
+            return random.choice(available_tokens)
 
-            # Get available tokens
-            available_tokens = [token for token in self.tokens if token not in self.rate_limit]
-            if available_tokens:
-                return available_tokens
-
-            # Wait for rate-limited tokens
-            if self.rate_limit:
-                shortest_cooldown = (min(self.rate_limit.values()) - current_time) + 1
-                await asyncio.sleep(shortest_cooldown)
-            else:
-                raise Exception("No tokens are available and no tokens are rate-limited")
-
-            loop += 1
-
-        raise Exception("Rate limit exceeded after maximum attempts")
+        return min(
+            self.tokens,
+            key=lambda t: self.rate_limiter.token_states[t]["cooldown_until"]
+        )
 
 
     async def fetch_snapshots(self, name: str) -> list:
@@ -86,17 +87,23 @@ class BackpackTFAPI:
         Returns:
             list: List of snapshots.
         """
-        try:
-            available_tokens = await self.get_available_tokens()
-            params = {
-                "sku": name,
-                "appid": "440",
-                "token": random.choice(available_tokens)
-            }
-            response = await self.call(f"{self.url}/classifieds/listings/snapshot", params)
-            return response
-        except Exception as e:
-            self.logger.write_log("error", f"Failed to fetch snapshots: {e}")
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                token = await self.get_token()
+
+                params = {
+                    "sku": name,
+                    "appid": "440",
+                    "token": token
+                }
+
+                response = await self.call(f"{self.url}/classifieds/listings/snapshot", params)
+                return response
+            except:
+                continue
+
+        raise Exception("Failed to fetch snapshots after multiple attempts")
 
 
     async def format_listing(self, listing: dict) -> dict:
@@ -184,19 +191,19 @@ class BackpackTFAPI:
             list: List of formatted listings."""
         try:
             if "None" in sku:
-                raise Exception("Invalid item SKU.")
+                raise Exception("Invalid item SKU")
 
             item_name = tf2.get_name_from_sku(sku)
             if not item_name:
-                raise Exception("Invalid item name.")
+                raise Exception("Invalid item name")
 
             snapshots = await self.fetch_snapshots(item_name)
             if not isinstance(snapshots, dict):
-                raise Exception("Invalid snapshots response from API.")
+                raise Exception("Invalid snapshots response from API")
             
             listings = snapshots.get("listings")
             if not listings:
-                raise Exception("No listings found.")
+                raise Exception("No active listings found")
             
             formatted_listings = []
             listing_ids = []

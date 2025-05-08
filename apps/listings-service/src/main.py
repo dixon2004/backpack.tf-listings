@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     logger.write_log("info", "Starting API server lifespan")
     if not SAVE_USER_DATA:
         await users_db.drop_database()
-        logger.write_log("info", "Saving user data is disabled, dropped the users database.")
+        logger.write_log("info", "Saving user data is disabled, dropped the users database")
 
     yield
     logger.write_log("info", "Stopping API server lifespan")
