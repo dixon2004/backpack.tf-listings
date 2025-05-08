@@ -51,7 +51,7 @@ class SyncLogger:
 
         file_path = os.path.join(self.log_path, log_file)
         file_handler = logging.handlers.RotatingFileHandler(
-            file_path, maxBytes=100 * 1024 * 1024, backupCount=self.backup_count
+            file_path, maxBytes=50 * 1024 * 1024, backupCount=self.backup_count
         )
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
