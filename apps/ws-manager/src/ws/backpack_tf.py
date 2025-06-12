@@ -81,7 +81,11 @@ class BackpackTFWebSocket:
                     for message in batch:
                         try:
                             payload = message['payload']
-                            item = payload['item']
+
+                            item = payload.get('item', {})
+                            if not item or not isinstance(item, dict):
+                                continue
+
                             item_name = item['name']
                             if not await self.cache.check_item_exists(item_name):
                                 continue
